@@ -250,18 +250,34 @@
                 <form id="labelForm">
                     <div class="form-group">
                         <label for="whiskyId">Whisky ID (from Whiskybase):</label>
-                        <input type="number" id="whiskyId" name="whisky_id" placeholder="e.g., 12345" required>
+                        <input type="number" id="whiskyId" name="whisky_id" placeholder="e.g., 12345">
+                    </div>
+                    <div class="form-group">
+                        <label for="whiskyName">Whisky Name (optional):</label>
+                        <input type="text" id="whiskyName" name="whisky_name" placeholder="e.g., Macallan 18 Year Old">
+                    </div>
+                    <div class="form-group">
+                        <label for="distillery">Distillery (optional):</label>
+                        <input type="text" id="distillery" name="distillery" placeholder="e.g., The Macallan">
+                    </div>
+                    <div class="form-group">
+                        <label for="abv">ABV (optional):</label>
+                        <input type="text" id="abv" name="abv" placeholder="e.g., 43%">
+                    </div>
+                    <div class="form-group">
+                        <label for="age">Age (optional):</label>
+                        <input type="text" id="age" name="age" placeholder="e.g., 18 years">
                     </div>
                     <button type="submit" class="btn" id="generateBtn">Generate Label</button>
                 </form>
                 
                 <div class="examples">
-                    <h3>Popular Whisky IDs to try:</h3>
+                    <h3>Quick Examples:</h3>
                     <ul>
-                        <li>Macallan 18: 12345</li>
-                        <li>Glenfiddich 12: 23456</li>
-                        <li>Laphroaig 10: 34567</li>
-                        <li>Ardbeg Uigeadail: 45678</li>
+                        <li onclick="fillExample('macallan')">Macallan 18 Year Old</li>
+                        <li onclick="fillExample('glenfiddich')">Glenfiddich 12 Year Old</li>
+                        <li onclick="fillExample('laphroaig')">Laphroaig 10 Year Old</li>
+                        <li onclick="fillExample('ardbeg')">Ardbeg Uigeadail</li>
                     </ul>
                 </div>
             </div>
@@ -284,6 +300,11 @@
             e.preventDefault();
             
             const whiskyId = document.getElementById('whiskyId').value;
+            const whiskyName = document.getElementById('whiskyName').value;
+            const distillery = document.getElementById('distillery').value;
+            const abv = document.getElementById('abv').value;
+            const age = document.getElementById('age').value;
+            
             const generateBtn = document.getElementById('generateBtn');
             const loading = document.getElementById('loading');
             const error = document.getElementById('error');
@@ -298,26 +319,58 @@
             generateBtn.disabled = true;
             
             try {
-                // First, get whisky information
-                const infoResponse = await fetch(`/api/whisky/${whiskyId}`);
-                const whiskyData = await infoResponse.json();
+                let whiskyData;
                 
-                if (whiskyData.error) {
-                    throw new Error(`Failed to fetch whisky data: ${whiskyData.error}`);
+                // If manual data is provided, use it
+                if (whiskyName || distillery || abv || age) {
+                    whiskyData = {
+                        id: whiskyId || Math.floor(Math.random() * 100000),
+                        name: whiskyName || `Whisky #${whiskyId || 'Custom'}`,
+                        distillery: distillery || 'Custom Distillery',
+                        abv: abv || 'Unknown ABV',
+                        age: age || '',
+                        url: whiskyId ? `https://www.whiskybase.com/whisky/${whiskyId}` : '#'
+                    };
+                } else if (whiskyId) {
+                    // Try to fetch from Whiskybase
+                    const infoResponse = await fetch(`/api/whisky/${whiskyId}`);
+                    whiskyData = await infoResponse.json();
+                    
+                    if (whiskyData.error) {
+                        throw new Error(`Failed to fetch whisky data: ${whiskyData.error}`);
+                    }
+                } else {
+                    throw new Error('Please provide either a Whisky ID or manual whisky details.');
                 }
                 
                 // Display whisky information
                 whiskyInfo.innerHTML = `
                     <h3>${whiskyData.name}</h3>
                     <p><strong>Distillery:</strong> ${whiskyData.distillery}</p>
-                    <p><strong>Region:</strong> ${whiskyData.region}</p>
+                    <p><strong>ABV:</strong> ${whiskyData.abv}</p>
                     ${whiskyData.age ? `<p><strong>Age:</strong> ${whiskyData.age}</p>` : ''}
                     <p><strong>ID:</strong> ${whiskyData.id}</p>
                 `;
                 whiskyInfo.style.display = 'block';
                 
                 // Generate and display label
-                labelPreview.src = `/api/label/${whiskyId}?t=${Date.now()}`;
+                let labelUrl;
+                if (whiskyName || distillery || abv || age) {
+                    // Use custom label endpoint with manual data
+                    const params = new URLSearchParams({
+                        name: whiskyName || `Whisky #${whiskyId || 'Custom'}`,
+                        distillery: distillery || 'Custom Distillery',
+                        abv: abv || 'Unknown ABV',
+                        age: age || '',
+                        id: whiskyId || 'Custom',
+                        t: Date.now()
+                    });
+                    labelUrl = `/api/custom-label?${params}`;
+                } else {
+                    // Use automatic label endpoint
+                    labelUrl = `/api/label/${whiskyId}?t=${Date.now()}`;
+                }
+                labelPreview.src = labelUrl;
                 labelPreview.onload = function() {
                     labelPreview.style.display = 'block';
                     loading.style.display = 'none';
@@ -332,14 +385,43 @@
             }
         });
         
-        // Add some example IDs for quick testing
-        document.querySelectorAll('.examples li').forEach(li => {
-            li.style.cursor = 'pointer';
-            li.addEventListener('click', function() {
-                const id = this.textContent.match(/\d+/)[0];
-                document.getElementById('whiskyId').value = id;
-            });
-        });
+        // Function to fill example data
+        function fillExample(type) {
+            const examples = {
+                macallan: {
+                    name: 'Macallan 18 Year Old',
+                    distillery: 'The Macallan',
+                    abv: '43%',
+                    age: '18 years'
+                },
+                glenfiddich: {
+                    name: 'Glenfiddich 12 Year Old',
+                    distillery: 'Glenfiddich',
+                    abv: '40%',
+                    age: '12 years'
+                },
+                laphroaig: {
+                    name: 'Laphroaig 10 Year Old',
+                    distillery: 'Laphroaig',
+                    abv: '43%',
+                    age: '10 years'
+                },
+                ardbeg: {
+                    name: 'Ardbeg Uigeadail',
+                    distillery: 'Ardbeg',
+                    abv: '54.2%',
+                    age: 'No Age Statement'
+                }
+            };
+            
+            const example = examples[type];
+            if (example) {
+                document.getElementById('whiskyName').value = example.name;
+                document.getElementById('distillery').value = example.distillery;
+                document.getElementById('abv').value = example.abv;
+                document.getElementById('age').value = example.age;
+            }
+        }
     </script>
 </body>
 </html>
