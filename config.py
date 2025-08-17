@@ -1,44 +1,36 @@
 # Configuration file for Whisky Label Generator
 
-# Label dimensions (width, height) in pixels
-LABEL_SIZE = (400, 600)
+# Label dimensions (in millimeters)
+DEFAULT_LABEL_WIDTH_MM = 35
+DEFAULT_LABEL_HEIGHT_MM = 37
 
-# QR code size in pixels
-QR_CODE_SIZE = 150
+# QR Code settings
+QR_CODE_SIZE_RATIO = 5  # QR code is 1/5 of the smaller label dimension
 
-# Font sizes
-FONT_LARGE = 24
-FONT_MEDIUM = 18
-FONT_SMALL = 14
+# Font settings
+BASE_FONT_SIZE_RATIO = 20  # Base font size is 1/20 of smaller label dimension
+LARGE_FONT_MULTIPLIER = 1.5
+MEDIUM_FONT_MULTIPLIER = 1.2
+SMALL_FONT_MULTIPLIER = 0.8
 
-# Colors (RGB tuples)
-COLORS = {
-    'background': (255, 255, 255),  # White
-    'text': (0, 0, 0),              # Black
-    'border': (0, 0, 0),            # Black
-    'error': (255, 0, 0),           # Red
-    'accent': (102, 126, 234)       # Blue
-}
+# Margins and spacing
+MARGIN_RATIO = 20  # Margin is 1/20 of label dimension
+LINE_HEIGHT_RATIO = 15  # Line height is 1/15 of label height
+
+# Print quality settings
+DPI = 300  # Dots per inch for print quality
+PIXELS_PER_MM = DPI / 25.4  # Convert mm to pixels
+
+# Colors
+BACKGROUND_COLOR = '#F5F5DC'  # Cream background
+TEXT_COLOR_PRIMARY = '#2F2F2F'  # Dark gray for main text
+TEXT_COLOR_SECONDARY = '#4A4A4A'  # Medium gray for secondary text
+TEXT_COLOR_TERTIARY = '#666666'  # Light gray for tertiary text
 
 # Whiskybase settings
 WHISKYBASE_BASE_URL = "https://www.whiskybase.com"
-REQUEST_TIMEOUT = 15
+TIMEOUT_SECONDS = 20
 
-# User agent for web scraping
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-
-# Label text customization
-LABEL_TEXTS = {
-    'title': 'WHISKY LABEL',
-    'scan_instruction': 'Scan for details',
-    'name_prefix': 'Name: ',
-    'distillery_prefix': 'Distillery: ',
-    'region_prefix': 'Region: ',
-    'age_prefix': 'Age: ',
-    'id_prefix': 'ID: ',
-    'note_prefix': 'Note: '
-}
-
-# File output settings
-DEFAULT_OUTPUT_FORMAT = 'PNG'
-DEFAULT_FILENAME_PATTERN = 'whisky_{id}_label.png'
+# Label text
+LABEL_TITLE = "WHISKY LABEL"
+SCAN_TEXT = "Scan for details"

@@ -268,6 +268,26 @@
                         <label for="age">Age (optional):</label>
                         <input type="text" id="age" name="age" placeholder="e.g., 18 years">
                     </div>
+                    
+                    <div class="form-group">
+                        <label for="width_mm">Label Width (mm):</label>
+                        <input type="number" id="width_mm" name="width_mm" value="35" min="10" max="100" step="0.1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="height_mm">Label Height (mm):</label>
+                        <input type="number" id="height_mm" name="height_mm" value="37" min="10" max="100" step="0.1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dpi">Resolution (DPI):</label>
+                        <select id="dpi" name="dpi">
+                            <option value="72">72 DPI (Screen)</option>
+                            <option value="150">150 DPI (Medium Print)</option>
+                            <option value="300">300 DPI (High Quality Print)</option>
+                        </select>
+                    </div>
+                    
                     <button type="submit" class="btn" id="generateBtn">Generate Label</button>
                 </form>
                 
@@ -304,6 +324,9 @@
             const distillery = document.getElementById('distillery').value;
             const abv = document.getElementById('abv').value;
             const age = document.getElementById('age').value;
+            const widthMm = document.getElementById('width_mm').value;
+            const heightMm = document.getElementById('height_mm').value;
+            const dpi = document.getElementById('dpi').value;
             
             const generateBtn = document.getElementById('generateBtn');
             const loading = document.getElementById('loading');
@@ -363,12 +386,15 @@
                         abv: abv || 'Unknown ABV',
                         age: age || '',
                         id: whiskyId || 'Custom',
+                        width_mm: widthMm,
+                        height_mm: heightMm,
+                        dpi: dpi,
                         t: Date.now()
                     });
                     labelUrl = `/api/custom-label?${params}`;
                 } else {
                     // Use automatic label endpoint
-                    labelUrl = `/api/label/${whiskyId}?t=${Date.now()}`;
+                    labelUrl = `/api/label/${whiskyId}?width_mm=${widthMm}&height_mm=${heightMm}&dpi=${dpi}&t=${Date.now()}`;
                 }
                 labelPreview.src = labelUrl;
                 labelPreview.onload = function() {
