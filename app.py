@@ -106,6 +106,12 @@ class WhiskyLabelGenerator:
                 # Wait for content to load
                 await page.wait_for_timeout(3000)
                 
+                # Wait for images to load
+                try:
+                    await page.wait_for_selector('img.photo.whisky-image-big', timeout=5000)
+                except:
+                    pass  # Continue even if the specific image doesn't load
+                
                 # Get page content
                 content = await page.content()
                 
@@ -215,12 +221,59 @@ class WhiskyLabelGenerator:
             except:
                 pass
             
+            # Extract whisky image
+            image_url = None
+            try:
+                # Look for whisky image with the correct CSS class
+                image_selectors = [
+                    'a.photo.whisky-image-big img',
+                    'a.whisky-image-big img',
+                    'a.photo img',
+                    'img.photo.whisky-image-big',
+                    'img.whisky-image-big',
+                    'img.photo',
+                    'img[class*="whisky-image"]',
+                    'img[src*="/whisky/"]',
+                    'img[alt*="whisky"]',
+                    'img[class*="whisky"]',
+                    'img[class*="bottle"]',
+                    '.whisky-image img',
+                    '.bottle-image img'
+                ]
+                
+                for selector in image_selectors:
+                    img_elem = await page.query_selector(selector)
+                    if img_elem:
+                        image_url = await img_elem.get_attribute('src')
+                        if image_url and not image_url.startswith('http'):
+                            image_url = f"{self.base_url}{image_url}"
+                        # If we found the main whisky image, use it
+                        if 'photo' in selector or 'whisky-image-big' in selector:
+                            break
+                        # Otherwise, continue looking for a better image
+                        
+                # If no image found with selectors, try to find it in the page content
+                if not image_url:
+                    page_content = await page.content()
+                    import re
+                    img_pattern = r'<img[^>]*src=["\']([^"\']*whisky[^"\']*)["\'][^>]*>'
+                    match = re.search(img_pattern, page_content, re.IGNORECASE)
+                    if match:
+                        image_url = match.group(1)
+                        if image_url and not image_url.startswith('http'):
+                            image_url = f"{self.base_url}{image_url}"
+                
+
+            except:
+                pass
+            
             return {
                 'id': whisky_id,
                 'name': name,
                 'distillery': distillery,
                 'abv': abv,
                 'age': age,
+                'image_url': image_url,
                 'url': url,
                 'source': 'whiskybase_playwright'
             }
@@ -252,6 +305,7 @@ class WhiskyLabelGenerator:
             'distillery': selected_whisky['distillery'],
             'abv': selected_whisky['abv'],
             'age': selected_whisky['age'],
+            'image_url': None,  # No image for fallback data
             'url': f"{self.base_url}/whisky/{whisky_id}",
             'source': 'fallback_data',
             'note': 'Data from fallback source (Whiskybase unavailable)'
