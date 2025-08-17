@@ -292,12 +292,14 @@
                 </form>
                 
                 <div class="examples">
-                    <h3>Quick Examples:</h3>
+                    <h3>Quick Examples (Real Whiskybase IDs):</h3>
                     <ul>
-                        <li onclick="fillExample('macallan')">Macallan 18 Year Old</li>
-                        <li onclick="fillExample('glenfiddich')">Glenfiddich 12 Year Old</li>
-                        <li onclick="fillExample('laphroaig')">Laphroaig 10 Year Old</li>
-                        <li onclick="fillExample('ardbeg')">Ardbeg Uigeadail</li>
+                        <li onclick="fillExample('balvenie_12')">Balvenie 12 Year Old (ID: 1)</li>
+                        <li onclick="fillExample('talisker_25')">Talisker 25 Year Old (ID: 123)</li>
+                        <li onclick="fillExample('balvenie_14')">Balvenie 14 Year Old Roasted Malt (ID: 2)</li>
+                        <li onclick="fillExample('lagavulin_30')">Lagavulin 30 Year Old (ID: 10)</li>
+                        <li onclick="fillExample('bruichladdich_20')">Bruichladdich Blacker Still (ID: 100)</li>
+                        <li onclick="fillExample('inchgower_27')">Inchgower 1976 (ID: 500)</li>
                     </ul>
                 </div>
             </div>
@@ -411,41 +413,27 @@
             }
         });
         
-        // Function to fill example data
+        // Function to fill example data with real Whiskybase IDs
         function fillExample(type) {
             const examples = {
-                macallan: {
-                    name: 'Macallan 18 Year Old',
-                    distillery: 'The Macallan',
-                    abv: '43%',
-                    age: '18 years'
-                },
-                glenfiddich: {
-                    name: 'Glenfiddich 12 Year Old',
-                    distillery: 'Glenfiddich',
-                    abv: '40%',
-                    age: '12 years'
-                },
-                laphroaig: {
-                    name: 'Laphroaig 10 Year Old',
-                    distillery: 'Laphroaig',
-                    abv: '43%',
-                    age: '10 years'
-                },
-                ardbeg: {
-                    name: 'Ardbeg Uigeadail',
-                    distillery: 'Ardbeg',
-                    abv: '54.2%',
-                    age: 'No Age Statement'
-                }
+                balvenie_12: { id: 1 },
+                talisker_25: { id: 123 },
+                balvenie_14: { id: 2 },
+                lagavulin_30: { id: 10 },
+                bruichladdich_20: { id: 100 },
+                inchgower_27: { id: 500 }
             };
             
             const example = examples[type];
             if (example) {
-                document.getElementById('whiskyName').value = example.name;
-                document.getElementById('distillery').value = example.distillery;
-                document.getElementById('abv').value = example.abv;
-                document.getElementById('age').value = example.age;
+                // Clear manual input fields
+                document.getElementById('whiskyName').value = '';
+                document.getElementById('distillery').value = '';
+                document.getElementById('abv').value = '';
+                document.getElementById('age').value = '';
+                
+                // Set the whisky ID to fetch real data from Whiskybase
+                document.getElementById('whiskyId').value = example.id;
             }
         }
     </script>
