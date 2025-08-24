@@ -566,5 +566,59 @@ def debug_whisky(whisky_id):
     whisky_info = generator.get_whisky_info(whisky_id)
     return jsonify(whisky_info)
 
+@app.route('/api/batch-labels', methods=['POST'])
+def api_batch_labels():
+    """API endpoint for generating multiple labels from a list of IDs"""
+    try:
+        data = request.get_json()
+        
+        # Extract parameters
+        whisky_ids = data.get('whisky_ids', [])
+        width_mm = int(data.get('width_mm', 35))
+        height_mm = int(data.get('height_mm', 37))
+        dpi = int(data.get('dpi', 72))
+        
+        if not whisky_ids:
+            return jsonify({'error': 'No whisky IDs provided'}), 400
+        
+        generator = WhiskyLabelGenerator()
+        generated_files = []
+        
+        for whisky_id in whisky_ids:
+            try:
+                # Get whisky info
+                whisky_info = generator.get_whisky_info(whisky_id)
+                
+                # Generate label
+                output_filename = f"whisky_{whisky_id}_label_{int(time.time())}.png"
+                generator.create_label(whisky_info, output_filename, width_mm, height_mm, dpi)
+                generated_files.append({
+                    'whisky_id': whisky_id,
+                    'filename': output_filename,
+                    'whisky_info': whisky_info
+                })
+                
+            except Exception as e:
+                generated_files.append({
+                    'whisky_id': whisky_id,
+                    'error': str(e),
+                    'filename': None
+                })
+        
+        # Create a ZIP file with all labels
+        import zipfile
+        import os
+        
+        zip_filename = f"batch_labels_{int(time.time())}.zip"
+        with zipfile.ZipFile(zip_filename, 'w') as zipf:
+            for file_info in generated_files:
+                if file_info.get('filename') and os.path.exists(file_info['filename']):
+                    zipf.write(file_info['filename'], os.path.basename(file_info['filename']))
+        
+        return send_file(zip_filename, mimetype='application/zip', as_attachment=True, download_name=zip_filename)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
