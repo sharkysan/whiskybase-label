@@ -329,7 +329,7 @@ class WhiskyLabelGenerator:
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
+            box_size=20,
             border=4,
         )
         qr.add_data(url)
@@ -380,8 +380,8 @@ class WhiskyLabelGenerator:
         qr_image = Image.open(qr_filename)
         
         # Resize QR code to fill the top portion of the label
-        # Use 30% of the label height for QR code to leave more room for text
-        qr_size = min(width, int(height * 0.3))
+        # Use 50% of the label height for QR code to make it more prominent
+        qr_size = min(width, int(height * 0.4))
         qr_image = qr_image.resize((qr_size, qr_size))
         
         # Position QR code centered at the top (accounting for border)

@@ -442,6 +442,12 @@
                     throw new Error('Please provide either a Whisky ID or manual whisky details.');
                 }
                 
+                // Populate form fields with fetched data
+                if (whiskyData.name) document.getElementById('whiskyName').value = whiskyData.name;
+                if (whiskyData.distillery) document.getElementById('distillery').value = whiskyData.distillery;
+                if (whiskyData.abv) document.getElementById('abv').value = whiskyData.abv;
+                if (whiskyData.age) document.getElementById('age').value = whiskyData.age;
+                
                 // Display whisky information
                 whiskyInfo.innerHTML = `
                     <h3>${whiskyData.name}</h3>
@@ -489,6 +495,14 @@
                     labelPreview.style.display = 'block';
                     loading.style.display = 'none';
                     generateBtn.disabled = false;
+                    
+                    // Automatically download the label
+                    const a = document.createElement('a');
+                    a.href = labelUrl;
+                    a.download = `whisky_label_${whiskyData.name.replace(/[^a-zA-Z0-9]/g, '_')}_ID${whiskyData.id || 'custom'}_${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
                 };
                 
             } catch (err) {
