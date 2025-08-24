@@ -313,7 +313,10 @@
                         </select>
                     </div>
                     
-                    <button type="submit" class="btn" id="generateBtn">Generate Label</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn" id="generateBtn" style="flex: 1;">Generate Label</button>
+                        <button type="button" class="btn" id="clearBtn" style="flex: 1; background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);" onclick="clearLabelForm()">Clear Form</button>
+                    </div>
                 </form>
                 
                 <div class="examples">
@@ -497,6 +500,18 @@
         });
         
         // Function to fill example data with real Whiskybase IDs
+        // Function to clear the label form
+        function clearLabelForm() {
+            document.getElementById('whiskyId').value = '';
+            document.getElementById('whiskyName').value = '';
+            document.getElementById('distillery').value = '';
+            document.getElementById('abv').value = '';
+            document.getElementById('age').value = '';
+            document.getElementById('width_mm').value = '35';
+            document.getElementById('height_mm').value = '37';
+            document.getElementById('dpi').value = '72';
+        }
+        
         function fillExample(type) {
             const examples = {
                 balvenie_12: { id: 1 },
