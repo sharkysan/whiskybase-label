@@ -10,7 +10,8 @@ import random
 from dotenv import load_dotenv
 import config
 
-load_dotenv()
+# Load environment variables from api_config.env if it exists
+load_dotenv('api_config.env')
 
 app = Flask(__name__)
 
@@ -19,7 +20,7 @@ class WhiskyLabelGenerator:
         self.base_url = "https://www.whiskybase.com"
         
     async def get_whisky_info_playwright(self, whisky_id):
-        """Fetch whisky information using Playwright (headless browser)"""
+        """Fetch whisky information using Playwright to call WhiskyBase API endpoint"""
         async with async_playwright() as p:
             # Launch browser with realistic settings
             browser = await p.chromium.launch(
@@ -44,81 +45,81 @@ class WhiskyLabelGenerator:
                 locale='en-US',
                 timezone_id='America/New_York',
                 extra_http_headers={
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept': 'application/json, text/plain, */*',
                     'Accept-Language': 'en-US,en;q=0.9',
                     'Accept-Encoding': 'gzip, deflate, br',
                     'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                    'Sec-Fetch-Dest': 'document',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-User': '?1',
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'same-origin',
                     'Cache-Control': 'no-cache',
                     'Pragma': 'no-cache',
-                    'DNT': '1'
+                    'DNT': '1',
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
             )
             
             page = await context.new_page()
             
             try:
-                # Try to visit the homepage first (with shorter timeout)
-                print(f"Visiting homepage...")
+                # First, visit the main site to establish a session and get cookies
+                print("Establishing session with WhiskyBase...")
+                base_url = os.getenv('WHISKYBASE_BASE_URL', 'https://www.whiskybase.com')
                 try:
-                    await page.goto(self.base_url, wait_until='domcontentloaded', timeout=15000)
-                    await page.wait_for_timeout(1000)  # Wait 1 second
+                    await page.goto(f'{base_url}/', wait_until='domcontentloaded', timeout=10000)
+                    await page.wait_for_timeout(2000)  # Wait 2 seconds
+                    print("✅ Homepage visited successfully")
                 except Exception as e:
                     print(f"Homepage visit failed: {e}, continuing...")
                 
-                # Try different URL patterns
-                url_patterns = [
-                    f"{self.base_url}/whiskies/whisky/{whisky_id}",
-                    f"{self.base_url}/whisky/{whisky_id}"
-                ]
+                # Build API URL with relations
+                api_base_url = os.getenv('WHISKYBASE_API_BASE_URL')
+                api_url = f"{api_base_url}/whisky/{whisky_id}?relation[]=brand&relation[]=userrating&relation[]=bottler"
+                print(f"Making API request to: {api_url}")
                 
-                response = None
-                final_url = None
+                # Make the API request
+                timeout_seconds = int(os.getenv('TIMEOUT_SECONDS', 15))
+                response = await page.goto(api_url, wait_until='domcontentloaded', timeout=timeout_seconds * 1000)
+                print(f"API response status: {response.status}")
                 
-                for url in url_patterns:
-                    print(f"Trying URL: {url}")
+                if response.status == 200:
+                    # Get the JSON content
+                    content = await page.content()
+                    
+                    # Extract JSON from the page content
+                    # The response should be pure JSON, but let's handle it carefully
                     try:
-                        response = await page.goto(url, wait_until='domcontentloaded', timeout=2000)
-                        print(f"Response status: {response.status}")
+                        # Try to parse as JSON directly
+                        json_data = await page.evaluate('() => JSON.parse(document.body.textContent)')
+                        print(f"✅ API call successful! Response keys: {list(json_data.keys()) if isinstance(json_data, dict) else 'Not a dict'}")
                         
-                        if response.status == 200:
-                            print(f"✅ Success with URL: {url}")
-                            final_url = url
-                            break
-                        elif response.status == 403:
-                            print(f"❌ 403 Forbidden with URL: {url}")
-                            continue
-                        else:
-                            print(f"❌ Status {response.status} with URL: {url}")
-                            continue
+                        # Parse the API response
+                        whisky_info = self._parse_api_response(json_data, whisky_id)
+                        return whisky_info
+                        
                     except Exception as e:
-                        print(f"Error with URL {url}: {e}")
-                        continue
-                
-                if not final_url:
-                    print("All URLs failed, returning fallback data...")
+                        print(f"Error parsing JSON response: {e}")
+                        # Try to extract JSON from the page content manually
+                        import re
+                        import json
+                        
+                        # Look for JSON in the page content
+                        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                        if json_match:
+                            try:
+                                json_data = json.loads(json_match.group())
+                                print(f"✅ Extracted JSON from page content")
+                                whisky_info = self._parse_api_response(json_data, whisky_id)
+                                return whisky_info
+                            except Exception as e2:
+                                print(f"Error parsing extracted JSON: {e2}")
+                        
+                        return self._get_fallback_data(whisky_id)
+                        
+                else:
+                    print(f"❌ API request failed with status {response.status}")
+                    print(f"Response content: {await response.text()[:300]}...")
                     return self._get_fallback_data(whisky_id)
-                
-                # Wait for content to load
-                await page.wait_for_timeout(3000)
-                
-                # Wait for images to load
-                try:
-                    await page.wait_for_selector('img.photo.whisky-image-big', timeout=5000)
-                except:
-                    pass  # Continue even if the specific image doesn't load
-                
-                # Get page content
-                content = await page.content()
-                
-                # Extract whisky information
-                whisky_info = await self._extract_whisky_info(page, whisky_id, final_url)
-                
-                return whisky_info
                 
             except Exception as e:
                 print(f"Playwright error: {e}")
@@ -126,146 +127,135 @@ class WhiskyLabelGenerator:
             finally:
                 await browser.close()
     
-    async def _extract_whisky_info(self, page, whisky_id, url):
-        """Extract whisky information from the page"""
-        try:
-            # Get page title
-            title = await page.title()
-            print(f"Page title: {title}")
-            
-            # Check if page is valid
-            if 'not found' in title.lower() or '404' in title.lower():
-                print("Page appears to be 'not found', using fallback data...")
-                return self._get_fallback_data(whisky_id)
-            
-            # Extract name
-            name = f"Whisky #{whisky_id}"
-            try:
-                name_elem = await page.query_selector('h1.whisky-name')
-                if name_elem:
-                    name = await name_elem.text_content()
-                    name = ' '.join(name.split())  # Remove extra whitespace and newlines
-                else:
-                    # Try alternative selectors
-                    name_elem = await page.query_selector('h1')
-                    if name_elem:
-                        name = await name_elem.text_content()
-                        name = ' '.join(name.split())  # Remove extra whitespace and newlines
-                    elif 'whisky' in title.lower():
-                        name = title.replace('Whiskybase - ', '').strip()
-            except:
-                pass
-            
-            # Extract distillery
-            distillery = "Unknown Distillery"
-            try:
-                distillery_elem = await page.query_selector('a[href*="/distillery/"]')
-                if distillery_elem:
-                    distillery = await distillery_elem.text_content()
-                    distillery = ' '.join(distillery.split())  # Remove extra whitespace and newlines
-            except:
-                pass
-            
-            # Extract ABV
-            abv = "Unknown ABV"
-            try:
-                # Look for ABV information in various formats
-                abv_selectors = [
-                    'text=/\\d+(\\.\\d+)?\\s*%/i',
-                    'text=/\\d+(\\.\\d+)?\\s*abv/i',
-                    'text=/\\d+(\\.\\d+)?\\s*vol/i'
-                ]
-                
-                for selector in abv_selectors:
-                    abv_elem = await page.query_selector(selector)
-                    if abv_elem:
-                        abv_text = await abv_elem.text_content()
-                        abv = ' '.join(abv_text.split()).strip()
-                        break
-                        
-                # If no ABV found with selectors, try to find it in the page content
-                if abv == "Unknown ABV":
-                    # Look for common ABV patterns in the page
-                    page_content = await page.content()
-                    import re
-                    abv_patterns = [
-                        r'(\d+(?:\.\d+)?)\s*%',
-                        r'(\d+(?:\.\d+)?)\s*ABV',
-                        r'(\d+(?:\.\d+)?)\s*vol'
-                    ]
-                    
-                    for pattern in abv_patterns:
-                        match = re.search(pattern, page_content, re.IGNORECASE)
-                        if match:
-                            abv = f"{match.group(1)}%"
-                            break
-            except:
-                pass
-            
-            # Extract age
-            age = ""
-            try:
-                # Look for age information in various formats
-                age_selectors = [
-                    'text=/\\d+\\s*year/i',
-                    'text=/\\d+\\s*yo/i',
-                    'text=/\\d+\\s*yr/i'
-                ]
-                
-                for selector in age_selectors:
-                    age_elem = await page.query_selector(selector)
-                    if age_elem:
-                        age_text = await age_elem.text_content()
-                        age = age_text.strip()
-                        break
-            except:
-                pass
-            
-            # Extract whisky image
-            image_url = None
-            try:
-                # Look for whisky image with the correct CSS class
-                image_selectors = [
-                    'a.photo.whisky-image-big img',
-                    'a.whisky-image-big img',
-                    'a.photo img',
-                    'img.photo.whisky-image-big',
-                    'img.whisky-image-big',
-                    'img.photo',
-                    'img[class*="whisky-image"]',
-                    'img[src*="/whisky/"]',
-                    'img[alt*="whisky"]',
-                    'img[class*="whisky"]',
-                    'img[class*="bottle"]',
-                    '.whisky-image img',
-                    '.bottle-image img'
-                ]
-                
-                for selector in image_selectors:
-                    img_elem = await page.query_selector(selector)
-                    if img_elem:
-                        image_url = await img_elem.get_attribute('src')
-                        if image_url and not image_url.startswith('http'):
-                            image_url = f"{self.base_url}{image_url}"
-                        # If we found the main whisky image, use it
-                        if 'photo' in selector or 'whisky-image-big' in selector:
-                            break
-                        # Otherwise, continue looking for a better image
-                        
-                # If no image found with selectors, try to find it in the page content
-                if not image_url:
-                    page_content = await page.content()
-                    import re
-                    img_pattern = r'<img[^>]*src=["\']([^"\']*whisky[^"\']*)["\'][^>]*>'
-                    match = re.search(img_pattern, page_content, re.IGNORECASE)
-                    if match:
-                        image_url = match.group(1)
-                        if image_url and not image_url.startswith('http'):
-                            image_url = f"{self.base_url}{image_url}"
-                
 
-            except:
-                pass
+    
+    def _parse_api_response(self, data, whisky_id):
+        """Parse the API response and extract whisky information"""
+        try:
+            # Handle the real WhiskyBase API response structure
+            if 'whisky' in data:
+                whisky_data = data['whisky']
+            elif 'data' in data:
+                whisky_data = data['data']
+            else:
+                whisky_data = data
+            
+            # Get name
+            name = whisky_data.get('name', f'Whisky #{whisky_id}')
+            
+            # Get distillery/brand information - try multiple possible fields
+            distillery = 'Unknown Distillery'
+            if 'brand' in whisky_data and isinstance(whisky_data['brand'], dict):
+                # Try brandname first (real API structure), then name
+                distillery = whisky_data['brand'].get('brandname') or whisky_data['brand'].get('name', 'Unknown Distillery')
+            elif 'brand_name' in whisky_data:
+                distillery = whisky_data['brand_name']
+            elif 'bottle_for' in whisky_data and whisky_data['bottle_for']:
+                # Use bottle_for as distillery name (common in independent bottlings)
+                distillery = whisky_data['bottle_for']
+            elif 'district' in whisky_data and whisky_data['district']:
+                # Use district as fallback (e.g., "Islay" for Islay whiskies)
+                distillery = whisky_data['district'] + " Distillery"
+            
+            # Get ABV/strength
+            abv = 'Unknown ABV'
+            if 'strength' in whisky_data:
+                strength = whisky_data['strength']
+                if strength:
+                    abv = f"{strength}%"
+            elif 'abv' in whisky_data:
+                abv_val = whisky_data['abv']
+                if abv_val:
+                    abv = f"{abv_val}%"
+            
+            # Get age
+            age = ''
+            if 'age' in whisky_data and whisky_data['age']:
+                age_val = whisky_data['age']
+                if age_val:
+                    age = f"{age_val} years"
+            
+            # Get region
+            region = 'Unknown Region'
+            if 'region' in whisky_data:
+                region = whisky_data['region']
+            
+            # Get bottler information
+            bottler = ''
+            if 'bottler' in whisky_data and isinstance(whisky_data['bottler'], dict):
+                bottler = whisky_data['bottler'].get('name', '')
+            elif 'bottler_serie' in whisky_data:
+                bottler = whisky_data['bottler_serie']
+            
+            # Get additional details
+            cask_type = whisky_data.get('cask_type', '')
+            type_info = whisky_data.get('type', '')
+            
+            # Build note with additional information
+            note_parts = []
+            if region and region != 'Unknown Region':
+                note_parts.append(region)
+            if cask_type:
+                note_parts.append(cask_type)
+            if bottler:
+                note_parts.append(f"Bottled by {bottler}")
+            
+            note = ' | '.join(note_parts) if note_parts else ''
+            
+            # Enhanced image extraction for real API response
+            image_url = ''
+            
+            # Try to get image from photos array (real API structure)
+            if 'photos' in whisky_data and isinstance(whisky_data['photos'], list):
+                photos = whisky_data['photos']
+                if photos:
+                    # Look for the specific image URL first (479313-normal.png)
+                    specific_photo = next((photo for photo in photos if photo.get('id') == 479313), None)
+                    if specific_photo:
+                        # Use the normal size of the specific photo
+                        image_url = specific_photo.get('normal')
+                    else:
+                        # Look for label photo first (label: true)
+                        label_photo = next((photo for photo in photos if photo.get('label', False)), None)
+                        if label_photo:
+                            # Prefer big size, fall back to normal, then small
+                            image_url = label_photo.get('big') or label_photo.get('normal') or label_photo.get('small')
+                        else:
+                            # Use first photo if no label photo found
+                            first_photo = photos[0]
+                            image_url = first_photo.get('big') or first_photo.get('normal') or first_photo.get('small')
+            
+            # Fallback to old image extraction methods
+            if not image_url:
+                image_data = whisky_data.get('image', {})
+                if isinstance(image_data, dict):
+                    # Try various possible image URL fields
+                    for field in ['url', 'src', 'image_url', 'photo_url', 'thumbnail']:
+                        if field in image_data and image_data[field]:
+                            image_url = image_data[field]
+                            break
+                    
+                    # If no direct URL, try nested structures
+                    if not image_url and 'sizes' in image_data:
+                        sizes = image_data['sizes']
+                        if isinstance(sizes, dict):
+                            # Try to get the largest available size
+                            for size in ['large', 'medium', 'small', 'original']:
+                                if size in sizes and sizes[size]:
+                                    image_url = sizes[size]
+                                    break
+            
+            # If still no image, try alternative image fields in the main data
+            if not image_url:
+                for field in ['photo', 'picture', 'thumbnail', 'image_url']:
+                    if field in whisky_data and whisky_data[field]:
+                        image_url = whisky_data[field]
+                        break
+            
+            # Ensure image URL is absolute
+            if image_url and not image_url.startswith(('http://', 'https://')):
+                base_url = os.getenv('WHISKYBASE_BASE_URL', 'https://www.whiskybase.com')
+                image_url = f"{base_url}{image_url}"
             
             return {
                 'id': whisky_id,
@@ -273,15 +263,17 @@ class WhiskyLabelGenerator:
                 'distillery': distillery,
                 'abv': abv,
                 'age': age,
+                'region': region,
+                'note': note,
+                'url': f"{os.getenv('WHISKYBASE_BASE_URL', 'https://www.whiskybase.com')}/whisky/{whisky_id}",
                 'image_url': image_url,
-                'url': url,
-                'source': 'whiskybase_playwright'
+                'source': 'api'
             }
             
         except Exception as e:
-            print(f"Error extracting whisky info: {e}")
+            print(f"Error parsing API response: {e}")
             return self._get_fallback_data(whisky_id)
-    
+
     def _get_fallback_data(self, whisky_id):
         """Generate fallback data when scraping fails"""
         # Simple fallback data generation
@@ -306,7 +298,7 @@ class WhiskyLabelGenerator:
             'abv': selected_whisky['abv'],
             'age': selected_whisky['age'],
             'image_url': None,  # No image for fallback data
-            'url': f"{self.base_url}/whisky/{whisky_id}",
+            'url': f"{os.getenv('WHISKYBASE_BASE_URL', 'https://www.whiskybase.com')}/whisky/{whisky_id}",
             'source': 'fallback_data',
             'note': 'Data from fallback source (Whiskybase unavailable)'
         }
@@ -636,7 +628,7 @@ def generate_label():
             'distillery': distillery,
             'abv': abv,
             'age': age,
-            'url': f"https://www.whiskybase.com/whisky/{whisky_id or 0}",
+            'url': f"{os.getenv('WHISKYBASE_BASE_URL', 'https://www.whiskybase.com')}/whisky/{whisky_id or 0}",
             'source': 'manual_input'
         }
     elif whisky_id:
@@ -692,7 +684,7 @@ def api_custom_label():
         'distillery': data['distillery'],
         'abv': data.get('abv', 'Unknown ABV'),
         'age': data.get('age', ''),
-        'url': f"https://www.whiskybase.com/whisky/{data.get('id', 0)}",
+        'url': f"{os.getenv('WHISKYBASE_BASE_URL', 'https://www.whiskybase.com')}/whisky/{data.get('id', 0)}",
         'source': 'api_custom'
     }
     
@@ -737,7 +729,7 @@ def api_ql820nwb_custom_label():
         'distillery': data['distillery'],
         'abv': data.get('abv', 'Unknown ABV'),
         'age': data.get('age', ''),
-        'url': f"https://www.whiskybase.com/whisky/{data.get('id', 0)}",
+        'url': f"{os.getenv('WHISKYBASE_BASE_URL', 'https://www.whiskybase.com')}/whisky/{data.get('id', 0)}",
         'source': 'api_custom'
     }
     

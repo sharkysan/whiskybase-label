@@ -244,6 +244,7 @@ logs/
 .env.local
 .env.production
 .env.staging
+api_config.env
 
 # Temporary files
 temp/
