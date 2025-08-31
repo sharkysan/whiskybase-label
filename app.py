@@ -463,6 +463,151 @@ class WhiskyLabelGenerator:
         
         return output_filename
 
+    def create_ql820nwb_label(self, whisky_info, output_filename="whisky_label_ql820nwb.png", size_preset='custom'):
+        """Create a whisky label optimized for Brother QL-820NWB thermal printer"""
+        # Get QL-820NWB settings
+        ql_settings = config.QL820NWB_SETTINGS
+        
+        # Get label dimensions based on preset
+        if size_preset in ql_settings['supported_sizes']:
+            width_mm = ql_settings['supported_sizes'][size_preset]['width_mm']
+            height_mm = ql_settings['supported_sizes'][size_preset]['height_mm']
+        else:
+            # Use custom size
+            width_mm = ql_settings['supported_sizes']['custom']['width_mm']
+            height_mm = ql_settings['supported_sizes']['custom']['height_mm']
+        
+        # Use QL-820NWB optimized DPI
+        dpi = ql_settings['dpi']
+        pixels_per_mm = dpi / 25.4
+        
+        width = int(width_mm * pixels_per_mm)
+        height = int(height_mm * pixels_per_mm)
+        
+        # Create image with pure white background for thermal printing
+        image = Image.new('RGB', (width, height), color=ql_settings['background_color'])
+        draw = ImageDraw.Draw(image)
+        
+        # Add black border for thermal printing
+        border_width = max(2, width // 150)  # Slightly thicker border for thermal printing
+        draw.rectangle([border_width, border_width, width - border_width, height - border_width], 
+                      outline=ql_settings['border_color'], width=border_width)
+        
+        # Calculate font sizes optimized for thermal printing
+        font_settings = ql_settings['font_settings']
+        base_font_size = min(width, height) // font_settings['base_font_size_ratio']
+        font_large_size = int(base_font_size * font_settings['large_font_multiplier'])
+        font_medium_size = int(base_font_size * font_settings['medium_font_multiplier'])
+        font_small_size = int(base_font_size * font_settings['small_font_multiplier'])
+        
+        try:
+            # Try to load Arial font for better thermal printing
+            font_large = ImageFont.truetype(font_settings['font_family'], font_large_size)
+            font_medium = ImageFont.truetype(font_settings['font_family'], font_medium_size)
+            font_small = ImageFont.truetype(font_settings['font_family'], font_small_size)
+        except:
+            # Fall back to default font
+            font_large = ImageFont.load_default()
+            font_medium = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+
+        # Create QR code optimized for thermal printing
+        qr_settings = ql_settings['qr_settings']
+        qr_filename = self.create_qr_code_thermal(whisky_info['url'], qr_settings)
+        qr_image = Image.open(qr_filename)
+        
+        # Resize QR code based on thermal printing settings
+        qr_size = min(width, int(height * qr_settings['size_ratio']))
+        qr_image = qr_image.resize((qr_size, qr_size))
+        
+        # Position QR code centered at the top
+        qr_x = (width - qr_size) // 2
+        qr_y = border_width * 2  # More margin for thermal printing
+        image.paste(qr_image, (qr_x, qr_y))
+        
+        # Add text content - start below QR code
+        y_position = qr_y + qr_size + (height // 25)  # More spacing for thermal printing
+        line_height = max(font_large_size + 2, height // 12)  # More line height for thermal printing
+        
+        # Whisky name
+        name = whisky_info['name']
+        max_name_length = width // (font_large_size // 3)  # More conservative character limit
+        if len(name) > max_name_length:
+            name = name[:max_name_length-3] + "..."
+        
+        # Center the text
+        bbox = draw.textbbox((0, 0), name, font=font_large)
+        text_width = bbox[2] - bbox[0]
+        text_x = (width - text_width) // 2
+        draw.text((text_x, y_position), name, fill=ql_settings['text_color'], font=font_large)
+        y_position += line_height
+        
+        # Distillery
+        distillery = whisky_info['distillery']
+        max_distillery_length = width // (font_medium_size // 3)
+        if len(distillery) > max_distillery_length:
+            distillery = distillery[:max_distillery_length-3] + "..."
+        
+        distillery_text = f"Distillery: {distillery}"
+        bbox = draw.textbbox((0, 0), distillery_text, font=font_medium)
+        text_width = bbox[2] - bbox[0]
+        text_x = (width - text_width) // 2
+        draw.text((text_x, y_position), distillery_text, fill=ql_settings['text_color'], font=font_medium)
+        y_position += line_height
+        
+        # ABV
+        abv = whisky_info.get('abv', 'Unknown ABV')
+        abv_text = f"ABV: {abv}"
+        bbox = draw.textbbox((0, 0), abv_text, font=font_medium)
+        text_width = bbox[2] - bbox[0]
+        text_x = (width - text_width) // 2
+        draw.text((text_x, y_position), abv_text, fill=ql_settings['text_color'], font=font_medium)
+        y_position += line_height
+        
+        # Age
+        if whisky_info.get('age'):
+            age = whisky_info['age']
+            age_text = f"Age: {age}"
+            bbox = draw.textbbox((0, 0), age_text, font=font_medium)
+            text_width = bbox[2] - bbox[0]
+            text_x = (width - text_width) // 2
+            draw.text((text_x, y_position), age_text, fill=ql_settings['text_color'], font=font_medium)
+            y_position += line_height
+        
+        # Whisky ID
+        id_text = f"ID: {whisky_info['id']}"
+        bbox = draw.textbbox((0, 0), id_text, font=font_small)
+        text_width = bbox[2] - bbox[0]
+        text_x = (width - text_width) // 2
+        draw.text((text_x, y_position), id_text, fill=ql_settings['text_color'], font=font_small)
+        
+        # Save the label
+        image.save(output_filename, 'PNG', dpi=(dpi, dpi))
+        
+        # Clean up QR code file
+        if os.path.exists(qr_filename):
+            os.remove(qr_filename)
+        
+        return output_filename
+
+    def create_qr_code_thermal(self, url, qr_settings):
+        """Create QR code optimized for thermal printing"""
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=getattr(qrcode.constants, f'ERROR_CORRECT_{qr_settings["error_correction"]}'),
+            box_size=qr_settings['border'],
+            border=qr_settings['border']
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        # Create QR code image with black on white for thermal printing
+        qr_image = qr.make_image(fill_color='black', back_color='white')
+        qr_filename = f"qr_thermal_{int(time.time())}.png"
+        qr_image.save(qr_filename)
+        
+        return qr_filename
+
 # Initialize the generator
 generator = WhiskyLabelGenerator()
 
@@ -554,6 +699,51 @@ def api_custom_label():
     label_filename = generator.create_label(whisky_info, width_mm=width_mm, height_mm=height_mm, dpi=dpi)
     return send_file(label_filename, mimetype='image/png')
 
+@app.route('/api/ql820nwb/<int:whisky_id>')
+def api_ql820nwb_label(whisky_id):
+    """API endpoint to generate label optimized for Brother QL-820NWB printer"""
+    whisky_info = generator.get_whisky_info(whisky_id)
+    
+    # Get size preset from query string (default to 'custom')
+    size_preset = request.args.get('size', default='custom')
+    
+    label_filename = generator.create_ql820nwb_label(whisky_info, size_preset=size_preset)
+    return send_file(label_filename, mimetype='image/png')
+
+@app.route('/api/ql820nwb/custom', methods=['POST', 'GET'])
+def api_ql820nwb_custom_label():
+    """API endpoint to generate QL-820NWB optimized label with custom data"""
+    if request.method == 'POST':
+        data = request.get_json()
+    else:
+        # Handle GET request with query parameters
+        data = {
+            'name': request.args.get('name'),
+            'distillery': request.args.get('distillery'),
+            'abv': request.args.get('abv'),
+            'age': request.args.get('age'),
+            'id': request.args.get('id')
+        }
+    
+    # Get size preset from query string (default to 'custom')
+    size_preset = request.args.get('size', default='custom')
+    
+    if not data or not data.get('name') or not data.get('distillery'):
+        return jsonify({'error': 'Name and distillery are required'}), 400
+    
+    whisky_info = {
+        'id': data.get('id', 0),
+        'name': data['name'],
+        'distillery': data['distillery'],
+        'abv': data.get('abv', 'Unknown ABV'),
+        'age': data.get('age', ''),
+        'url': f"https://www.whiskybase.com/whisky/{data.get('id', 0)}",
+        'source': 'api_custom'
+    }
+    
+    label_filename = generator.create_ql820nwb_label(whisky_info, size_preset=size_preset)
+    return send_file(label_filename, mimetype='image/png')
+
 @app.route('/api/whisky/<int:whisky_id>')
 def api_whisky(whisky_id):
     """API endpoint to get whisky information"""
@@ -566,6 +756,65 @@ def debug_whisky(whisky_id):
     whisky_info = generator.get_whisky_info(whisky_id)
     return jsonify(whisky_info)
 
+@app.route('/api/print/<int:whisky_id>')
+def api_print_label(whisky_id):
+    """API endpoint to print label directly (opens print dialog)"""
+    whisky_info = generator.get_whisky_info(whisky_id)
+    
+    # Get parameters
+    printer_type = request.args.get('printer_type', default='standard')
+    size_preset = request.args.get('size', default='custom')
+    width_mm = request.args.get('width_mm', type=float, default=35.0)
+    height_mm = request.args.get('height_mm', type=float, default=37.0)
+    dpi = request.args.get('dpi', type=int, default=72)
+    
+    # Generate appropriate label
+    if printer_type == 'ql820nwb':
+        label_filename = generator.create_ql820nwb_label(whisky_info, size_preset=size_preset)
+    else:
+        label_filename = generator.create_label(whisky_info, width_mm=width_mm, height_mm=height_mm, dpi=dpi)
+    
+    # Return HTML page that auto-prints
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Print Whisky Label</title>
+        <style>
+            body {{ margin: 0; padding: 20px; text-align: center; }}
+            .label-container {{ display: inline-block; }}
+            .print-button {{ 
+                margin: 20px; 
+                padding: 10px 20px; 
+                background: #27ae60; 
+                color: white; 
+                border: none; 
+                border-radius: 5px; 
+                cursor: pointer; 
+                font-size: 16px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="label-container">
+            <img src="/{label_filename}" alt="Whisky Label" style="max-width: 100%; height: auto;">
+        </div>
+        <br>
+        <button class="print-button" onclick="window.print()">🖨️ Print Label</button>
+        <script>
+            // Auto-print after page loads
+            window.onload = function() {{
+                setTimeout(function() {{
+                    window.print();
+                }}, 1000);
+            }};
+        </script>
+    </body>
+    </html>
+    """
+    
+    return html_content
+
 @app.route('/api/batch-labels', methods=['POST'])
 def api_batch_labels():
     """API endpoint for generating multiple labels from a list of IDs"""
@@ -577,6 +826,8 @@ def api_batch_labels():
         width_mm = int(data.get('width_mm', 35))
         height_mm = int(data.get('height_mm', 37))
         dpi = int(data.get('dpi', 72))
+        printer_type = data.get('printer_type', 'standard')
+        ql820nwb_size = data.get('ql820nwb_size', 'custom')
         
         if not whisky_ids:
             return jsonify({'error': 'No whisky IDs provided'}), 400
@@ -589,9 +840,14 @@ def api_batch_labels():
                 # Get whisky info
                 whisky_info = generator.get_whisky_info(whisky_id)
                 
-                # Generate label
-                output_filename = f"whisky_{whisky_id}_label_{int(time.time())}.png"
-                generator.create_label(whisky_info, output_filename, width_mm, height_mm, dpi)
+                # Generate label based on printer type
+                if printer_type == 'ql820nwb':
+                    output_filename = f"whisky_{whisky_id}_ql820nwb_{int(time.time())}.png"
+                    generator.create_ql820nwb_label(whisky_info, output_filename, size_preset=ql820nwb_size)
+                else:
+                    output_filename = f"whisky_{whisky_id}_label_{int(time.time())}.png"
+                    generator.create_label(whisky_info, output_filename, width_mm, height_mm, dpi)
+                
                 generated_files.append({
                     'whisky_id': whisky_id,
                     'filename': output_filename,

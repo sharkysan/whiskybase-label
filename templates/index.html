@@ -313,6 +313,24 @@
                         </select>
                     </div>
                     
+                    <div class="form-group">
+                        <label for="printerType">Printer Type:</label>
+                        <select id="printerType" name="printer_type">
+                            <option value="standard">Standard (Any Printer)</option>
+                            <option value="ql820nwb">Brother QL-820NWB (Thermal)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="ql820nwbSizeGroup" style="display: none;">
+                        <label for="ql820nwbSize">QL-820NWB Label Size:</label>
+                        <select id="ql820nwbSize" name="ql820nwb_size">
+                            <option value="small">Small (17mm x 54mm)</option>
+                            <option value="medium">Medium (29mm x 90mm)</option>
+                            <option value="large">Large (38mm x 90mm)</option>
+                            <option value="custom">Custom Size</option>
+                        </select>
+                    </div>
+                    
                     <div style="display: flex; gap: 10px;">
                         <button type="submit" class="btn" id="generateBtn" style="flex: 1;">Generate Label</button>
                         <button type="button" class="btn" id="clearBtn" style="flex: 1; background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);" onclick="clearLabelForm()">Clear Form</button>
@@ -359,7 +377,30 @@
                         </select>
                     </div>
                     
-                    <button type="submit" class="btn" id="batchBtn">Generate Batch Labels</button>
+                    <div class="form-group">
+                        <label for="batchPrinterType">Printer Type:</label>
+                        <select id="batchPrinterType" name="batch_printer_type">
+                            <option value="standard">Standard (Any Printer)</option>
+                            <option value="ql820nwb">Brother QL-820NWB (Thermal)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="batchQl820nwbSizeGroup" style="display: none;">
+                        <label for="batchQl820nwbSize">QL-820NWB Label Size:</label>
+                        <select id="batchQl820nwbSize" name="batch_ql820nwb_size">
+                            <option value="small">Small (17mm x 54mm)</option>
+                            <option value="medium">Medium (29mm x 90mm)</option>
+                            <option value="large">Large (38mm x 90mm)</option>
+                            <option value="custom">Custom Size</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn" id="batchBtn" style="flex: 1;">Generate Batch Labels</button>
+                        <button type="button" class="btn" id="batchPrintBtn" style="flex: 1; background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);">
+                            🖨️ Generate & Print Batch
+                        </button>
+                    </div>
                 </form>
                 
                 <div class="examples">
@@ -384,6 +425,14 @@
                     <img id="whiskyBottle" class="bottle-image" alt="Whisky Bottle">
                 </div>
                 <img id="labelPreview" class="label-preview" style="display: none;">
+                <div id="printControls" style="display: none; margin-top: 20px; text-align: center;">
+                    <button type="button" class="btn" id="printBtn" style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); margin-right: 10px;">
+                        🖨️ Print Label
+                    </button>
+                    <button type="button" class="btn" id="printBatchBtn" style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);">
+                        🖨️ Print Batch
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -470,51 +519,81 @@
                     };
                 }
                 
+                // Get printer type and QL-820NWB settings
+                const printerType = document.getElementById('printerType').value;
+                const ql820nwbSize = document.getElementById('ql820nwbSize').value;
+                
                 // Generate and display label
                 let labelUrl;
-                if (whiskyName || distillery || abv || age) {
-                    // Use custom label endpoint with manual data
-                    const params = new URLSearchParams({
-                        name: whiskyName || `Whisky #${whiskyId || 'Custom'}`,
-                        distillery: distillery || 'Custom Distillery',
-                        abv: abv || 'Unknown ABV',
-                        age: age || '',
-                        id: whiskyId || 'Custom',
-                        width_mm: widthMm,
-                        height_mm: heightMm,
-                        dpi: dpi,
-                        t: Date.now()
-                    });
-                    labelUrl = `/api/custom-label?${params}`;
+                if (printerType === 'ql820nwb') {
+                    // Use QL-820NWB optimized endpoints
+                    if (whiskyName || distillery || abv || age) {
+                        // Use custom QL-820NWB label endpoint with manual data
+                        const params = new URLSearchParams({
+                            name: whiskyName || `Whisky #${whiskyId || 'Custom'}`,
+                            distillery: distillery || 'Custom Distillery',
+                            abv: abv || 'Unknown ABV',
+                            age: age || '',
+                            id: whiskyId || 'Custom',
+                            size: ql820nwbSize,
+                            t: Date.now()
+                        });
+                        labelUrl = `/api/ql820nwb/custom?${params}`;
+                    } else {
+                        // Use automatic QL-820NWB label endpoint
+                        labelUrl = `/api/ql820nwb/${whiskyId}?size=${ql820nwbSize}&t=${Date.now()}`;
+                    }
                 } else {
-                    // Use automatic label endpoint
-                    labelUrl = `/api/label/${whiskyId}?width_mm=${widthMm}&height_mm=${heightMm}&dpi=${dpi}&t=${Date.now()}`;
+                    // Use standard endpoints
+                    if (whiskyName || distillery || abv || age) {
+                        // Use custom label endpoint with manual data
+                        const params = new URLSearchParams({
+                            name: whiskyName || `Whisky #${whiskyId || 'Custom'}`,
+                            distillery: distillery || 'Custom Distillery',
+                            abv: abv || 'Unknown ABV',
+                            age: age || '',
+                            id: whiskyId || 'Custom',
+                            width_mm: widthMm,
+                            height_mm: heightMm,
+                            dpi: dpi,
+                            t: Date.now()
+                        });
+                        labelUrl = `/api/custom-label?${params}`;
+                    } else {
+                        // Use automatic label endpoint
+                        labelUrl = `/api/label/${whiskyId}?width_mm=${widthMm}&height_mm=${heightMm}&dpi=${dpi}&t=${Date.now()}`;
+                    }
                 }
                 labelPreview.src = labelUrl;
                 labelPreview.onload = function() {
                     labelPreview.style.display = 'block';
+                    document.getElementById('printControls').style.display = 'block';
                     loading.style.display = 'none';
                     generateBtn.disabled = false;
                     
-                                         // Automatically download the label using fetch and blob
-                     fetch(labelUrl)
-                         .then(response => response.blob())
-                         .then(blob => {
-                             const a = document.createElement('a');
-                             const url = window.URL.createObjectURL(blob);
-                             a.href = url;
-                             // Create a simple filename
-                             const filename = `whisky_label_${whiskyData.id}_${Date.now()}.png`;
-                             console.log('Downloading file:', filename);
-                             a.download = filename;
-                             document.body.appendChild(a);
-                             a.click();
-                             window.URL.revokeObjectURL(url);
-                             document.body.removeChild(a);
-                         })
-                         .catch(err => {
-                             console.error('Download failed:', err);
-                         });
+                    // Store the label URL for printing
+                    window.currentLabelUrl = labelUrl;
+                    window.currentWhiskyData = whiskyData;
+                    
+                    // Automatically download the label using fetch and blob
+                    fetch(labelUrl)
+                        .then(response => response.blob())
+                        .then(blob => {
+                            const a = document.createElement('a');
+                            const url = window.URL.createObjectURL(blob);
+                            a.href = url;
+                            // Create a simple filename
+                            const filename = `whisky_label_${whiskyData.id}_${Date.now()}.png`;
+                            console.log('Downloading file:', filename);
+                            a.download = filename;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                        })
+                        .catch(err => {
+                            console.error('Download failed:', err);
+                        });
                 };
                 
             } catch (err) {
@@ -536,6 +615,263 @@
             document.getElementById('width_mm').value = '35';
             document.getElementById('height_mm').value = '37';
             document.getElementById('dpi').value = '72';
+            document.getElementById('printerType').value = 'standard';
+            document.getElementById('ql820nwbSize').value = 'custom';
+            document.getElementById('ql820nwbSizeGroup').style.display = 'none';
+            
+            // Hide print controls and clear current label
+            document.getElementById('printControls').style.display = 'none';
+            document.getElementById('labelPreview').style.display = 'none';
+            window.currentLabelUrl = null;
+            window.currentWhiskyData = null;
+        }
+        
+        // Function to handle printer type change
+        function handlePrinterTypeChange() {
+            const printerType = document.getElementById('printerType').value;
+            const ql820nwbSizeGroup = document.getElementById('ql820nwbSizeGroup');
+            
+            if (printerType === 'ql820nwb') {
+                ql820nwbSizeGroup.style.display = 'block';
+            } else {
+                ql820nwbSizeGroup.style.display = 'none';
+            }
+        }
+        
+        // Function to handle batch printer type change
+        function handleBatchPrinterTypeChange() {
+            const batchPrinterType = document.getElementById('batchPrinterType').value;
+            const batchQl820nwbSizeGroup = document.getElementById('batchQl820nwbSizeGroup');
+            
+            if (batchPrinterType === 'ql820nwb') {
+                batchQl820nwbSizeGroup.style.display = 'block';
+            } else {
+                batchQl820nwbSizeGroup.style.display = 'none';
+            }
+        }
+        
+        // Add event listener for printer type change
+        document.getElementById('printerType').addEventListener('change', handlePrinterTypeChange);
+        document.getElementById('batchPrinterType').addEventListener('change', handleBatchPrinterTypeChange);
+        
+        // Add event listeners for print buttons
+        document.getElementById('printBtn').addEventListener('click', printCurrentLabel);
+        document.getElementById('printBatchBtn').addEventListener('click', printBatchLabels);
+        document.getElementById('batchPrintBtn').addEventListener('click', generateAndPrintBatch);
+        
+        // Function to print the current label
+        function printCurrentLabel() {
+            if (!window.currentWhiskyData) {
+                alert('No label available to print. Please generate a label first.');
+                return;
+            }
+            
+            const printBtn = document.getElementById('printBtn');
+            const originalText = printBtn.innerHTML;
+            printBtn.innerHTML = '🖨️ Printing...';
+            printBtn.disabled = true;
+            
+            // Get current settings
+            const printerType = document.getElementById('printerType').value;
+            const ql820nwbSize = document.getElementById('ql820nwbSize').value;
+            const widthMm = document.getElementById('width_mm').value;
+            const heightMm = document.getElementById('height_mm').value;
+            const dpi = document.getElementById('dpi').value;
+            
+            // Build print URL
+            let printUrl = `/api/print/${window.currentWhiskyData.id}?`;
+            if (printerType === 'ql820nwb') {
+                printUrl += `printer_type=ql820nwb&size=${ql820nwbSize}`;
+            } else {
+                printUrl += `printer_type=standard&width_mm=${widthMm}&height_mm=${heightMm}&dpi=${dpi}`;
+            }
+            
+            // Create a new window for printing
+            const printWindow = window.open(printUrl, '_blank');
+            
+            printWindow.onload = function() {
+                // Auto-print is handled by the print page
+                // Reset button after a delay
+                setTimeout(() => {
+                    printBtn.innerHTML = originalText;
+                    printBtn.disabled = false;
+                }, 2000);
+            };
+            
+            printWindow.onerror = function() {
+                alert('Failed to open print window. Please try again.');
+                printBtn.innerHTML = originalText;
+                printBtn.disabled = false;
+            };
+        }
+        
+        // Function to print batch labels
+        function printBatchLabels() {
+            const batchIds = document.getElementById('batchIds').value.trim();
+            if (!batchIds) {
+                alert('Please enter whisky IDs for batch printing.');
+                return;
+            }
+            
+            const printBatchBtn = document.getElementById('printBatchBtn');
+            const originalText = printBatchBtn.innerHTML;
+            printBatchBtn.innerHTML = '🖨️ Generating Batch...';
+            printBatchBtn.disabled = true;
+            
+            // Get batch parameters
+            const widthMm = document.getElementById('batchWidth').value;
+            const heightMm = document.getElementById('batchHeight').value;
+            const dpi = document.getElementById('batchDpi').value;
+            const printerType = document.getElementById('printerType').value;
+            const ql820nwbSize = document.getElementById('ql820nwbSize').value;
+            
+            // Prepare batch data
+            const whiskyIds = batchIds.split(',').map(id => id.trim()).filter(id => id);
+            
+            if (whiskyIds.length === 0) {
+                alert('Please enter valid whisky IDs.');
+                printBatchBtn.innerHTML = originalText;
+                printBatchBtn.disabled = false;
+                return;
+            }
+            
+            const batchData = {
+                whisky_ids: whiskyIds,
+                width_mm: parseInt(widthMm),
+                height_mm: parseInt(heightMm),
+                dpi: parseInt(dpi),
+                printer_type: printerType,
+                ql820nwb_size: ql820nwbSize
+            };
+            
+            // Generate batch labels
+            fetch('/api/batch-labels', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(batchData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Batch generation failed');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // Create download link for batch
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `batch_labels_${Date.now()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                alert(`Batch labels generated successfully! ${whiskyIds.length} labels created.`);
+            })
+            .catch(error => {
+                console.error('Batch generation error:', error);
+                alert('Failed to generate batch labels. Please try again.');
+            })
+            .finally(() => {
+                printBatchBtn.innerHTML = originalText;
+                printBatchBtn.disabled = false;
+            });
+        }
+        
+        // Function to generate and print batch labels
+        function generateAndPrintBatch() {
+            const batchIds = document.getElementById('batchIds').value.trim();
+            if (!batchIds) {
+                alert('Please enter whisky IDs for batch printing.');
+                return;
+            }
+            
+            const batchPrintBtn = document.getElementById('batchPrintBtn');
+            const originalText = batchPrintBtn.innerHTML;
+            batchPrintBtn.innerHTML = '🖨️ Generating & Printing...';
+            batchPrintBtn.disabled = true;
+            
+            // Get batch parameters
+            const widthMm = document.getElementById('batchWidth').value;
+            const heightMm = document.getElementById('batchHeight').value;
+            const dpi = document.getElementById('batchDpi').value;
+            const printerType = document.getElementById('batchPrinterType').value;
+            const ql820nwbSize = document.getElementById('batchQl820nwbSize').value;
+            
+            // Prepare batch data
+            const whiskyIds = batchIds.split(',').map(id => id.trim()).filter(id => id);
+            
+            if (whiskyIds.length === 0) {
+                alert('Please enter valid whisky IDs.');
+                batchPrintBtn.innerHTML = originalText;
+                batchPrintBtn.disabled = false;
+                return;
+            }
+            
+            // Generate batch labels first
+            const batchData = {
+                whisky_ids: whiskyIds,
+                width_mm: parseInt(widthMm),
+                height_mm: parseInt(heightMm),
+                dpi: parseInt(dpi),
+                printer_type: printerType,
+                ql820nwb_size: ql820nwbSize
+            };
+            
+            fetch('/api/batch-labels', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(batchData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Batch generation failed');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // Create download link for batch
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `batch_labels_${Date.now()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                // Open print dialog for each label
+                whiskyIds.forEach((whiskyId, index) => {
+                    setTimeout(() => {
+                        let printUrl = `/api/print/${whiskyId}?`;
+                        if (printerType === 'ql820nwb') {
+                            printUrl += `printer_type=ql820nwb&size=${ql820nwbSize}`;
+                        } else {
+                            printUrl += `printer_type=standard&width_mm=${widthMm}&height_mm=${heightMm}&dpi=${dpi}`;
+                        }
+                        
+                        const printWindow = window.open(printUrl, '_blank');
+                        printWindow.onload = function() {
+                            // Auto-print is handled by the print page
+                        };
+                    }, index * 2000); // Delay each print by 2 seconds
+                });
+                
+                alert(`Batch labels generated and printing started! ${whiskyIds.length} labels will be printed.`);
+            })
+            .catch(error => {
+                console.error('Batch generation error:', error);
+                alert('Failed to generate batch labels. Please try again.');
+            })
+            .finally(() => {
+                batchPrintBtn.innerHTML = originalText;
+                batchPrintBtn.disabled = false;
+            });
         }
         
         function fillExample(type) {
@@ -583,6 +919,8 @@
             const batchWidth = document.getElementById('batchWidth').value;
             const batchHeight = document.getElementById('batchHeight').value;
             const batchDpi = document.getElementById('batchDpi').value;
+            const batchPrinterType = document.getElementById('batchPrinterType').value;
+            const batchQl820nwbSize = document.getElementById('batchQl820nwbSize').value;
             const batchBtn = document.getElementById('batchBtn');
             
             if (!batchIds.trim()) {
@@ -611,7 +949,9 @@
                         whisky_ids: whiskyIds,
                         width_mm: parseInt(batchWidth),
                         height_mm: parseInt(batchHeight),
-                        dpi: parseInt(batchDpi)
+                        dpi: parseInt(batchDpi),
+                        printer_type: batchPrinterType,
+                        ql820nwb_size: batchQl820nwbSize
                     })
                 });
                 
